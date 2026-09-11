@@ -75,6 +75,7 @@ def agg(days, gran):
             g[2] = max(g[2], r[2]); g[3] = min(g[3], r[3]); g[4] = r[4]; g[0] = r[0]
     return [groups[k] for k in order]
 
+_ALL_DAYS = {}
 for i, code in enumerate(codes):
     try:
         e = json.load(open(f"sw/{code}.json", encoding='utf-8'))
@@ -86,6 +87,7 @@ for i, code in enumerate(codes):
         days = [dmap[k] for k in sorted(dmap)]
         if not days:
             continue
+        _ALL_DAYS[code] = days
         q = agg(days, 'Q')
         y = agg(days, 'Y')
         json.dump(q, open(f"quarter/{code}.json", 'w', encoding='utf-8'), ensure_ascii=False)
@@ -94,12 +96,44 @@ for i, code in enumerate(codes):
         pass
 print("quarter/year 重算完成")
 
-# 3) 更新 meta 最新价
+# 3) 更新 meta 最新价 + 日/周涨跌幅 + 高低点统计（30/40日×高低×天/周/月）
+import datetime as _dt
+def _hstat(days, n, is_high):
+    recent = days[-n:]
+    if len(recent) < 2: return None
+    t = max(recent, key=lambda x: x[2]) if is_high else min(recent, key=lambda x: x[3])
+    last = days[-1]
+    ti = days.index(t)
+    dn = len(days) - 1 - ti
+    d1, d2 = t[0], last[0]
+    dt1 = _dt.date(d1//10000, (d1%10000)//100, d1%100)
+    dt2 = _dt.date(d2//10000, (d2%10000)//100, d2%100)
+    wn = max(0, (dt2 - dt1).days // 7)
+    mn = max(0, (d2//10000 - d1//10000)*12 + ((d2%10000)//100 - (d1%10000)//100))
+    return dn, wn, mn
+def _week_pct(days):
+    weeks = {}
+    for d in days:
+        dt = _dt.date(d[0]//10000, (d[0]%10000)//100, d[0]%100)
+        weeks[dt.isocalendar()[:2]] = d[4]
+    ks = sorted(weeks)
+    if len(ks) >= 2 and weeks[ks[-2]]:
+        return round((weeks[ks[-1]]/weeks[ks[-2]]-1)*100, 2)
+    return None
 for m in meta:
     code = m["code"]
-    d = delta.get(code) or []
-    if d:
-        last = d[-1]
+    days = _ALL_DAYS.get(code) or []
+    if days:
+        last = days[-1]
         m["price"], m["date"] = last[4], last[0]
+        if len(days) >= 2:
+            m["day_pct"] = round((days[-1][4]/days[-2][4]-1)*100, 2)
+        wp = _week_pct(days)
+        if wp is not None: m["week_pct"] = wp
+        for pn, keyn in ((30,'30'), (40,'40')):
+            for is_high, hn in ((True,'hi'), (False,'lo')):
+                r = _hstat(days, pn, is_high)
+                if r:
+                    m[f"h{keyn}{hn}_days"], m[f"h{keyn}{hn}_weeks"], m[f"h{keyn}{hn}_months"] = r
 json.dump(meta, open(meta_path, 'w', encoding='utf-8'), ensure_ascii=False)
 print("完成")
