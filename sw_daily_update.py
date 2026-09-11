@@ -26,17 +26,17 @@ while True:
 print(f"官网列表: {len(all_items)} 条")
 
 # 2) 读 meta 拿需要的 code（只更新已在仓库的指数）
-meta_path = "swdata/meta.json"
+meta_path = "meta.json"
 meta = json.load(open(meta_path, encoding='utf-8')) if os.path.exists(meta_path) else []
 codes = {m["code"] for m in meta}
 if not codes:
     # 从 sw/ 目录回退
-    codes = {f[:-5] for f in os.listdir("swdata/sw") if f.endswith(".json")}
+    codes = {f[:-5] for f in os.listdir("sw") if f.endswith(".json")}
 
 # 3) 拉每个指数当日（trend 全量取末根 = 当日，比 history_home 更稳）
 now = time.strftime("%Y-%m")
 ym = now
-delta_path = f"swdata/delta/{ym}.json"
+delta_path = f"delta/{ym}.json"
 delta = json.load(open(delta_path, encoding='utf-8')) if os.path.exists(delta_path) else {}
 
 changed = 0
